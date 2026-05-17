@@ -27,7 +27,20 @@ export default function DashboardScreen() {
   const { bleConnection, bleDevices, scanDevices, connectToDevice, disconnectDevice } = useBle();
   const { fetchCurrentHealth } = useHealthData();
   const currentHealth = useAppStore((state: any) => state.currentHealth);
+  const healthHistory = useAppStore((state: any) => state.healthHistory || []);
   const [isModalVisible, setModalVisible] = useState(false);
+
+  const realHrData = healthHistory
+    .filter((d: any) => d.heartRate > 0)
+    .slice(-24) // Take last 24 items to not overcrowd the mini chart
+    .map((d: any) => {
+      const date = new Date(d.timestamp);
+      return {
+        time: `${date.getHours()}:${date.getMinutes()}`,
+        value: d.heartRate,
+        id: d.timestamp,
+      };
+    });
 
   useEffect(() => {
     fetchCurrentHealth();
@@ -148,8 +161,8 @@ export default function DashboardScreen() {
           <Text style={styles.sectionTitle}>활동 트렌드</Text>
           <View style={styles.activityCard}>
              <MiniChart
-                title="심박수 변화 (최근 24시간)"
-                data={generateHeartRateData()}
+                title="심박수 변화 (최근 실시간 데이터)"
+                data={realHrData.length > 0 ? realHrData : generateHeartRateData()}
                 color={COLORS.heart}
                 height={120}
               />

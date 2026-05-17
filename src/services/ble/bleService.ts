@@ -26,7 +26,16 @@ export class BleService {
       throw new Error('BLE scanning is not supported on web.');
     }
     if (!this.manager) {
-      this.manager = new BleManager();
+      this.manager = new BleManager({
+        restoreStateIdentifier: 'huckBleRestoreIdentifier',
+        restoreStateFunction: (restoredState) => {
+          if (restoredState == null) {
+            // BleManager was initialized for the first time.
+            return;
+          }
+          // The state was restored.
+        },
+      });
     }
     return this.manager;
   }

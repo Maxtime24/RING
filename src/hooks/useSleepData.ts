@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react';
-import { sleepDataAPI } from '../services/api/sleep';
 import useAppStore from '../store/useAppStore';
 import { SleepData } from '../types';
 
@@ -10,22 +9,10 @@ export function useSleepData() {
   const setTodaySleep = useAppStore((state: any) => state.setTodaySleep);
 
   const fetchTodaySleep = useCallback(async () => {
-    setLoading(true);
+    // Backend API bypassed; using local state from useAppStore
+    setLoading(false);
     setError(null);
-
-    try {
-      const response = await sleepDataAPI.getTodaySleepData();
-      if (response.success) {
-        setTodaySleep(response.data ?? null);
-      } else {
-        setError(response.error?.message || '수면 데이터를 가져오는 데 실패했습니다.');
-      }
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [setTodaySleep]);
+  }, []);
 
   const saveSleepData = useCallback(
     async (data: Partial<SleepData>) => {
@@ -33,13 +20,12 @@ export function useSleepData() {
       setError(null);
 
       try {
-        const response = await sleepDataAPI.saveSleepData(data);
-        if (response.success && response.data) {
-          setTodaySleep(response.data);
-          return response.data;
-        }
-
-        throw new Error(response.error?.message || '저장에 실패했습니다.');
+        // Backend API bypassed; updating local state manually
+        const updatedSleep = todaySleep 
+          ? { ...todaySleep, ...data } 
+          : { ...data } as SleepData;
+        setTodaySleep(updatedSleep);
+        return updatedSleep;
       } catch (err) {
         setError(String(err));
         throw err;
@@ -47,7 +33,7 @@ export function useSleepData() {
         setLoading(false);
       }
     },
-    [setTodaySleep]
+    [todaySleep, setTodaySleep]
   );
 
   return {

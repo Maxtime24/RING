@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   BLEConnectionState,
   BLEDevice,
@@ -8,67 +10,103 @@ import {
   User,
 } from '../types';
 
+const MAX_HISTORY_LENGTH = 2000; // Limit history to prevent excessive memory usage
+
 interface AppStore {
   bleConnection: BLEConnectionState;
   bleDevices: BLEDevice[];
   currentHealth: HealthData | null;
+  healthHistory: HealthData[];
   todaySleep: SleepData | null;
   focusAnalysis: FocusAnalysis | null;
   user: User | null;
+  
   setBleConnection: (state: Partial<BLEConnectionState>) => void;
   setBleDevices: (devices: BLEDevice[]) => void;
   setCurrentHealth: (health: HealthData | null) => void;
   setTodaySleep: (sleep: SleepData | null) => void;
   setFocusAnalysis: (focus: FocusAnalysis | null) => void;
   setUser: (user: User | null) => void;
+  
   // Specific health updates
   setHeartRate: (bpm: number) => void;
   setOxygenLevel: (spo2: number) => void;
   setSteps: (steps: number) => void;
 }
 
-const useAppStore = create<AppStore>((set) => ({
-  bleConnection: {
-    isScanning: false,
-    isConnecting: false,
-    isConnected: false,
-    device: null,
-    error: null,
-  },
-  bleDevices: [],
-  currentHealth: null,
-  todaySleep: null,
-  focusAnalysis: null,
-  user: null,
-
-  setBleConnection: (state: Partial<BLEConnectionState>) =>
-    set((current) => ({
+const useAppStore = create<AppStore>()(
+  persist(
+    (set) => ({
       bleConnection: {
-        ...current.bleConnection,
-        ...state,
+        isScanning: false,
+        isConnecting: false,
+        isConnected: false,
+        device: null,
+        error: null,
       },
-    })),
-  setBleDevices: (devices: BLEDevice[]) => set({ bleDevices: devices }),
-  setCurrentHealth: (health: HealthData | null) => set({ currentHealth: health }),
-  setTodaySleep: (todaySleep: SleepData | null) => set({ todaySleep }),
-  setFocusAnalysis: (focusAnalysis: FocusAnalysis | null) => set({ focusAnalysis }),
-  setUser: (user: User | null) => set({ user }),
-  
-  setHeartRate: (bpm: number) => set((state) => ({
-    currentHealth: state.currentHealth 
-      ? { ...state.currentHealth, heartRate: bpm } 
-      : { heartRate: bpm, oxygenLevel: 0, steps: 0, calories: 0, distance: 0, timestamp: new Date().toISOString() } as any
-  })),
-  setOxygenLevel: (spo2: number) => set((state) => ({
-    currentHealth: state.currentHealth 
-      ? { ...state.currentHealth, oxygenLevel: spo2 } 
-      : { heartRate: 0, oxygenLevel: spo2, steps: 0, calories: 0, distance: 0, timestamp: new Date().toISOString() } as any
-  })),
-  setSteps: (steps: number) => set((state) => ({
-    currentHealth: state.currentHealth 
-      ? { ...state.currentHealth, steps: steps } 
-      : { heartRate: 0, oxygenLevel: 0, steps: steps, calories: 0, distance: 0, timestamp: new Date().toISOString() } as any
-  })),
-}));
+      bleDevices: [],
+      currentHealth: null,
+      healthHistory: [],
+      todaySleep: null,
+      focusAnalysis: null,
+      user: null,
+
+      setBleConnection: (state: Partial<BLEConnectionState>) =>
+        set((current) => ({
+          bleConnection: {
+            ...current.bleConnection,
+            ...state,
+          },
+        })),
+      setBleDevices: (devices: BLEDevice[]) => set({ bleDevices: devices }),
+      setCurrentHealth: (health: HealthData | null) => set({ currentHealth: health }),
+      setTodaySleep: (todaySleep: SleepData | null) => set({ todaySleep }),
+      setFocusAnalysis: (focusAnalysis: FocusAnalysis | null) => set({ focusAnalysis }),
+      setUser: (user: User | null) => set({ user }),
+      
+      setHeartRate: (bpm: number) => set((state) => {
+        const timestamp = new Date().toISOString();
+        const newHealth = state.currentHealth 
+          ? { ...state.currentHealth, heartRate: bpm, timestamp } 
+          : { heartRate: bpm, oxygenLevel: 0, steps: 0, calories: 0, distance: 0, timestamp, id: timestamp, userId: 'local' } as any;
+          
+        const newHistory = [...state.healthHistory, newHealth].slice(-MAX_HISTORY_LENGTH);
+        return { currentHealth: newHealth, healthHistory: newHistory };
+      }),
+      
+      setOxygenLevel: (spo2: number) => set((state) => {
+        const timestamp = new Date().toISOString();
+        const newHealth = state.currentHealth 
+          ? { ...state.currentHealth, oxygenLevel: spo2, timestamp } 
+          : { heartRate: 0, oxygenLevel: spo2, steps: 0, calories: 0, distance: 0, timestamp, id: timestamp, userId: 'local' } as any;
+          
+        const newHistory = [...state.healthHistory, newHealth].slice(-MAX_HISTORY_LENGTH);
+        return { currentHealth: newHealth, healthHistory: newHistory };
+      }),
+      
+      setSteps: (steps: number) => set((state) => {
+        const timestamp = new Date().toISOString();
+        const newHealth = state.currentHealth 
+          ? { ...state.currentHealth, steps: steps, timestamp } 
+          : { heartRate: 0, oxygenLevel: 0, steps: steps, calories: 0, distance: 0, timestamp, id: timestamp, userId: 'local' } as any;
+          
+        const newHistory = [...state.healthHistory, newHealth].slice(-MAX_HISTORY_LENGTH);
+        return { currentHealth: newHealth, healthHistory: newHistory };
+      }),
+    }),
+    {
+      name: 'huck-storage', // unique name
+      storage: createJSONStorage(() => AsyncStorage),
+      // We don't want to persist BLE connection state, as it resets on app restart
+      partialize: (state) => ({ 
+        currentHealth: state.currentHealth,
+        healthHistory: state.healthHistory,
+        todaySleep: state.todaySleep,
+        focusAnalysis: state.focusAnalysis,
+        user: state.user
+      }),
+    }
+  )
+);
 
 export default useAppStore;

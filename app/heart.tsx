@@ -17,38 +17,59 @@ export default function HeartRateScreen() {
   const [timeRange, setTimeRange] = useState<'1h' | '24h'>('24h');
   const { fetchCurrentHealth } = useHealthData();
   const currentHealth = useAppStore((state: any) => state.currentHealth);
+  const healthHistory = useAppStore((state: any) => state.healthHistory || []);
 
   useEffect(() => {
     fetchCurrentHealth();
   }, [fetchCurrentHealth]);
 
+  const currentHr = currentHealth?.heartRate || '--';
+
   const stats = [
-    { label: '현재', value: currentHealth?.heartRate?.toString() || '72', unit: 'bpm' },
+    { label: '현재', value: currentHr.toString(), unit: 'bpm' },
     { label: '평균', value: '68', unit: 'bpm' },
     { label: '최고', value: '95', unit: 'bpm' },
     { label: '최저', value: '58', unit: 'bpm' },
   ];
 
-  const data24h = Array.from({ length: 24 }, (_, i) => ({
+  // Map real healthHistory from BLE
+  const realChartData = healthHistory
+    .filter((d: any) => d.heartRate > 0)
+    .map((d: any) => {
+      const date = new Date(d.timestamp);
+      const hours = date.getHours().toString().padStart(2, '0');
+      const mins = date.getMinutes().toString().padStart(2, '0');
+      return {
+        time: `${hours}:${mins}`,
+        value: d.heartRate,
+        id: d.timestamp,
+      };
+    });
+
+  // Fallback to mock data only if we have absolutely no history, to keep UI looking good
+  const mockData24h = Array.from({ length: 24 }, (_, i) => ({
     time: `${i}:00`,
     value: 60 + Math.sin(i / 4) * 20 + Math.random() * 10,
     id: `24h-${i}`,
   }));
 
-  const data1h = Array.from({ length: 60 }, (_, i) => ({
+  const mockData1h = Array.from({ length: 60 }, (_, i) => ({
     time: `${Math.floor(i / 6)}:${(i % 6) * 10}`,
     value: 72 + Math.sin(i / 10) * 5 + Math.random() * 3,
     id: `1h-${i}`,
   }));
 
-  const chartData = timeRange === '24h' ? data24h : data1h;
+  // If we have real data, use it. Otherwise, fallback.
+  const chartData = realChartData.length > 0 
+    ? realChartData 
+    : (timeRange === '24h' ? mockData24h : mockData1h);
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>심박수 리포트</Text>
-          <Text style={styles.currentValue}>72 <Text style={styles.unit}>bpm</Text></Text>
+          <Text style={styles.currentValue}>{currentHr} <Text style={styles.unit}>bpm</Text></Text>
           <Text style={styles.headerStatus}>정상 • 안정적임</Text>
         </View>
 

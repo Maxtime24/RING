@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react';
-import { focusDataAPI } from '../services/api/focus';
 import useAppStore from '../store/useAppStore';
 
 export function useFocusData() {
@@ -10,23 +9,11 @@ export function useFocusData() {
 
   const fetchFocusAnalysis = useCallback(
     async (days = 7) => {
-      setLoading(true);
+      // Backend API bypassed; using local state from useAppStore
+      setLoading(false);
       setError(null);
-
-      try {
-        const response = await focusDataAPI.getFocusAnalysis(days);
-        if (response.success && response.data) {
-          setFocusAnalysis(response.data);
-        } else {
-          setError(response.error?.message || '집중 분석 데이터를 가져오는 데 실패했습니다.');
-        }
-      } catch (err) {
-        setError(String(err));
-      } finally {
-        setLoading(false);
-      }
     },
-    [setFocusAnalysis]
+    []
   );
 
   return {

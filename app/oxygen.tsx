@@ -18,38 +18,56 @@ export default function OxygenScreen() {
   const [timeRange, setTimeRange] = useState<'1h' | '24h'>('24h');
   const { fetchCurrentHealth } = useHealthData();
   const currentHealth = useAppStore((state: any) => state.currentHealth);
+  const healthHistory = useAppStore((state: any) => state.healthHistory || []);
 
   useEffect(() => {
     fetchCurrentHealth();
   }, [fetchCurrentHealth]);
 
+  const currentO2 = currentHealth?.oxygenLevel || '--';
+
   const stats = [
-    { label: '현재', value: currentHealth?.oxygenLevel?.toString() || '98', unit: '%' },
+    { label: '현재', value: currentO2.toString(), unit: '%' },
     { label: '평균', value: '97', unit: '%' },
     { label: '최고', value: '99', unit: '%' },
     { label: '최저', value: '94', unit: '%' },
   ];
 
-  const data24h = Array.from({ length: 24 }, (_, i) => ({
+  const realChartData = healthHistory
+    .filter((d: any) => d.oxygenLevel > 0)
+    .map((d: any) => {
+      const date = new Date(d.timestamp);
+      const hours = date.getHours().toString().padStart(2, '0');
+      const mins = date.getMinutes().toString().padStart(2, '0');
+      return {
+        time: `${hours}:${mins}`,
+        value: d.oxygenLevel,
+        id: d.timestamp,
+      };
+    });
+
+  const mockData24h = Array.from({ length: 24 }, (_, i) => ({
     time: `${i}:00`,
     value: 95 + Math.sin(i / 5) * 3 + Math.random() * 2,
     id: `24h-${i}`,
   }));
 
-  const data1h = Array.from({ length: 60 }, (_, i) => ({
+  const mockData1h = Array.from({ length: 60 }, (_, i) => ({
     time: `${Math.floor(i / 6)}:${(i % 6) * 10}`,
     value: 98 + Math.sin(i / 15) * 2 + Math.random() * 1,
     id: `1h-${i}`,
   }));
 
-  const chartData = timeRange === '24h' ? data24h : data1h;
+  const chartData = realChartData.length > 0 
+    ? realChartData 
+    : (timeRange === '24h' ? mockData24h : mockData1h);
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>혈중 산소도 리포트</Text>
-          <Text style={styles.currentValue}>98 <Text style={styles.unit}>%</Text></Text>
+          <Text style={styles.currentValue}>{currentO2} <Text style={styles.unit}>%</Text></Text>
           <Text style={styles.headerStatus}>매우 좋음 • 정상 범위</Text>
         </View>
 
