@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 import { COLORS } from '../src/constants';
 
 export default function TabLayout() {
@@ -76,8 +76,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     borderTopColor: COLORS.border,
     borderTopWidth: 1,
-    height: 70,
-    paddingBottom: 10,
+    height: Platform.OS === 'ios' ? 88 : 80,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 20,
     paddingTop: 10,
   },
   header: {
@@ -89,3 +89,4 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
 });
+

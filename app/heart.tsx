@@ -11,6 +11,7 @@ import DetailChart from '../components/DetailChart';
 import StatisticsGrid from '../components/StatisticsGrid';
 import { COLORS } from '../src/constants';
 import { useHealthData } from '../src/hooks/useHealthData';
+import { useMeasurement } from '../src/hooks/useMeasurement';
 import useAppStore from '../src/store/useAppStore';
 
 export default function HeartRateScreen() {
@@ -18,6 +19,9 @@ export default function HeartRateScreen() {
   const { fetchCurrentHealth } = useHealthData();
   const currentHealth = useAppStore((state: any) => state.currentHealth);
   const healthHistory = useAppStore((state: any) => state.healthHistory || []);
+  
+  const { isMeasuringHR, lastHRMeasuredAt, measureHeartRate } = useMeasurement();
+  const bleConnection = useAppStore((state: any) => state.bleConnection);
 
   useEffect(() => {
     fetchCurrentHealth();
@@ -64,16 +68,62 @@ export default function HeartRateScreen() {
     ? realChartData 
     : (timeRange === '24h' ? mockData24h : mockData1h);
 
+  const formatTime = (isoString: string | null) => {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    const hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? '오후' : '오전';
+    const displayHours = hours % 12 || 12;
+    return `${ampm} ${displayHours}:${minutes}`;
+  };
+
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>심박수 리포트</Text>
           <Text style={styles.currentValue}>{currentHr} <Text style={styles.unit}>bpm</Text></Text>
-          <Text style={styles.headerStatus}>정상 • 안정적임</Text>
+          <Text style={styles.headerStatus}>
+            {isMeasuringHR ? '심박수 분석 시작됨' : '정상 • 안정적임'}
+          </Text>
+
+          {/* 측정 제어 버튼 */}
+          <TouchableOpacity
+            style={[
+              styles.measureButton,
+              isMeasuringHR && styles.measureButtonActive,
+              !bleConnection.isConnected && styles.measureButtonDisabled,
+            ]}
+            onPress={measureHeartRate}
+            disabled={isMeasuringHR || !bleConnection.isConnected}
+          >
+            <Text style={isMeasuringHR ? styles.measureButtonTextActive : styles.measureButtonText}>
+              {isMeasuringHR 
+                ? '측정 중 (60초)...' 
+                : bleConnection.isConnected 
+                  ? '지금 측정하기' 
+                  : '링을 연결해주세요'
+              }
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.content}>
+          {/* 실시간 측정 상태 배너 */}
+          {bleConnection.isConnected && (
+            <View style={[styles.statusBanner, isMeasuringHR && styles.statusBannerActive]}>
+              <Text style={styles.statusBannerText}>
+                {isMeasuringHR 
+                  ? '⚡ 스마트링에서 실시간 심박수 측정 신호를 처리하고 있습니다.' 
+                  : lastHRMeasuredAt 
+                    ? `✓ 최근 측정 완료: ${formatTime(lastHRMeasuredAt)} (10분 주기로 자동 측정)` 
+                    : '⏳ 10분 주기로 자동 건강 측정이 동작 중입니다.'
+                }
+              </Text>
+            </View>
+          )}
+
           <StatisticsGrid stats={stats} />
 
           <View style={styles.timeRangeSelector}>
@@ -173,14 +223,65 @@ const styles = StyleSheet.create({
     color: COLORS.heart,
     marginTop: 4,
   },
+  measureButton: {
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    backgroundColor: COLORS.primary,
+    borderRadius: 24,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  measureButtonActive: {
+    backgroundColor: COLORS.heart,
+    shadowColor: COLORS.heart,
+  },
+  measureButtonDisabled: {
+    backgroundColor: COLORS.textTertiary,
+    shadowColor: 'transparent',
+    elevation: 0,
+  },
+  measureButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  measureButtonTextActive: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  statusBanner: {
+    backgroundColor: COLORS.backgroundSecondary,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  statusBannerActive: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primary,
+  },
+  statusBannerText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
   content: {
     paddingHorizontal: 16,
-    paddingTop: 20,
+    paddingTop: 8,
   },
   timeRangeSelector: {
     flexDirection: 'row',
     gap: 12,
     marginBottom: 20,
+    marginTop: 8,
   },
   timeButton: {
     flex: 1,
@@ -239,6 +340,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   bottomSpacer: {
-    height: 30,
+    height: 80,
   },
 });
+

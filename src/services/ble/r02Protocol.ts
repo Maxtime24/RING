@@ -13,6 +13,24 @@ export enum R02Command {
   SYNC_TIME = 0x05,
 }
 
+export enum RealTimeReading {
+  HEART_RATE = 1,
+  BLOOD_PRESSURE = 2,
+  SPO2 = 3,
+  FATIGUE = 4,
+  HEALTH_CHECK = 5,
+}
+
+export enum RealTimeAction {
+  START = 1,
+  PAUSE = 2,
+  CONTINUE = 3,
+  STOP = 4,
+}
+
+export const CMD_START_REAL_TIME = 105; // 0x69
+export const CMD_STOP_REAL_TIME = 106; // 0x6A
+
 export interface R02Data {
   type: R02Command;
   value: number;
@@ -20,6 +38,34 @@ export interface R02Data {
 }
 
 export class R02Protocol {
+  /**
+   * Calculate 8-bit checksum (sum of all bytes & 255)
+   */
+  static checksum(packet: Buffer): number {
+    let sum = 0;
+    for (let i = 0; i < 15; i++) {
+      sum += packet[i];
+    }
+    return sum & 255;
+  }
+
+  /**
+   * Create a well-formed 16-byte packet with checksum
+   */
+  static makePacket(command: number, subData?: number[]): Buffer {
+    const packet = Buffer.alloc(16, 0);
+    packet[0] = command;
+
+    if (subData) {
+      for (let i = 0; i < subData.length && i < 14; i++) {
+        packet[i + 1] = subData[i];
+      }
+    }
+
+    packet[15] = this.checksum(packet);
+    return packet;
+  }
+
   /**
    * Parse a 16-byte notification packet from the ring.
    */
@@ -31,6 +77,26 @@ export class R02Protocol {
     const cmd = buffer[0];
     
     switch (cmd) {
+      case CMD_START_REAL_TIME: {
+        const kind = buffer[1];
+        const errorCode = buffer[2];
+        if (errorCode !== 0) return null;
+
+        if (kind === RealTimeReading.HEART_RATE) {
+          return {
+            type: R02Command.HEART_RATE,
+            value: buffer[3],
+            raw: base64Value,
+          };
+        } else if (kind === RealTimeReading.SPO2) {
+          return {
+            type: R02Command.BLOOD_OXYGEN,
+            value: buffer[3],
+            raw: base64Value,
+          };
+        }
+        return null;
+      }
       case R02Command.HEART_RATE:
         return {
           type: R02Command.HEART_RATE,
@@ -66,11 +132,20 @@ export class R02Protocol {
    * Create a command packet to send to the ring.
    */
   static createCommand(cmd: R02Command, payload: number[] = []): string {
-    const buffer = Buffer.alloc(16, 0);
-    buffer[0] = cmd;
-    for (let i = 0; i < payload.length && i < 15; i++) {
-      buffer[i + 1] = payload[i];
-    }
+    const buffer = this.makePacket(cmd, payload);
     return buffer.toString('base64');
   }
+
+  static getStartPacket(readingType: RealTimeReading): string {
+    return this.makePacket(CMD_START_REAL_TIME, [readingType, RealTimeAction.START]).toString('base64');
+  }
+
+  static getContinuePacket(readingType: RealTimeReading): string {
+    return this.makePacket(CMD_START_REAL_TIME, [readingType, RealTimeAction.CONTINUE]).toString('base64');
+  }
+
+  static getStopPacket(readingType: RealTimeReading): string {
+    return this.makePacket(CMD_STOP_REAL_TIME, [readingType, 0, 0]).toString('base64');
+  }
 }
+

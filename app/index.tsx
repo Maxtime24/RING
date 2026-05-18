@@ -17,6 +17,7 @@ import MetricCard from '../components/MetricCard';
 import MiniChart from '../components/MiniChart';
 import { COLORS, TYPOGRAPHY } from '../src/constants';
 import { useBle } from '../src/hooks/useBle';
+import { useMeasurement } from '../src/hooks/useMeasurement';
 import useAppStore from '../src/store/useAppStore';
 import { useHealthData } from '../src/hooks/useHealthData';
 import { generateSleepForecast } from '../src/utils/sleepModels';
@@ -26,6 +27,7 @@ const { width } = Dimensions.get('window');
 export default function DashboardScreen() {
   const { bleConnection, bleDevices, scanDevices, connectToDevice, disconnectDevice } = useBle();
   const { fetchCurrentHealth } = useHealthData();
+  useMeasurement(); // Start automatic HR and SpO2 schedule on BLE connection
   const currentHealth = useAppStore((state: any) => state.currentHealth);
   const healthHistory = useAppStore((state: any) => state.healthHistory || []);
   const [isModalVisible, setModalVisible] = useState(false);

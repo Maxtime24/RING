@@ -230,5 +230,5 @@ const styles = StyleSheet.create({
   tipItem: { flexDirection: 'row', marginBottom: 12 },
   tipBullet: { fontSize: 20, color: COLORS.primary, marginRight: 8 },
   tipText: { fontSize: 14, color: COLORS.textSecondary, flex: 1, lineHeight: 22 },
-  bottomSpacer: { height: 30 },
+  bottomSpacer: { height: 80 },
 });

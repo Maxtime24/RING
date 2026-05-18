@@ -20,6 +20,12 @@ interface AppStore {
   todaySleep: SleepData | null;
   focusAnalysis: FocusAnalysis | null;
   user: User | null;
+
+  // Real-time measurement states
+  isMeasuringHR: boolean;
+  isMeasuringO2: boolean;
+  lastHRMeasuredAt: string | null;
+  lastO2MeasuredAt: string | null;
   
   setBleConnection: (state: Partial<BLEConnectionState>) => void;
   setBleDevices: (devices: BLEDevice[]) => void;
@@ -32,6 +38,10 @@ interface AppStore {
   setHeartRate: (bpm: number) => void;
   setOxygenLevel: (spo2: number) => void;
   setSteps: (steps: number) => void;
+
+  // Real-time measurement actions
+  setMeasuring: (type: 'hr' | 'o2', value: boolean) => void;
+  setLastMeasuredAt: (type: 'hr' | 'o2', timestamp: string | null) => void;
 }
 
 const useAppStore = create<AppStore>()(
@@ -50,6 +60,12 @@ const useAppStore = create<AppStore>()(
       todaySleep: null,
       focusAnalysis: null,
       user: null,
+
+      // Initial real-time measurement states
+      isMeasuringHR: false,
+      isMeasuringO2: false,
+      lastHRMeasuredAt: null,
+      lastO2MeasuredAt: null,
 
       setBleConnection: (state: Partial<BLEConnectionState>) =>
         set((current) => ({
@@ -93,6 +109,22 @@ const useAppStore = create<AppStore>()(
         const newHistory = [...state.healthHistory, newHealth].slice(-MAX_HISTORY_LENGTH);
         return { currentHealth: newHealth, healthHistory: newHistory };
       }),
+
+      setMeasuring: (type: 'hr' | 'o2', value: boolean) => set((state) => {
+        if (type === 'hr') {
+          return { isMeasuringHR: value };
+        } else {
+          return { isMeasuringO2: value };
+        }
+      }),
+
+      setLastMeasuredAt: (type: 'hr' | 'o2', timestamp: string | null) => set((state) => {
+        if (type === 'hr') {
+          return { lastHRMeasuredAt: timestamp };
+        } else {
+          return { lastO2MeasuredAt: timestamp };
+        }
+      }),
     }),
     {
       name: 'huck-storage', // unique name
@@ -103,10 +135,13 @@ const useAppStore = create<AppStore>()(
         healthHistory: state.healthHistory,
         todaySleep: state.todaySleep,
         focusAnalysis: state.focusAnalysis,
-        user: state.user
+        user: state.user,
+        lastHRMeasuredAt: state.lastHRMeasuredAt,
+        lastO2MeasuredAt: state.lastO2MeasuredAt,
       }),
     }
   )
 );
+
 
 export default useAppStore;

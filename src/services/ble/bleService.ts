@@ -80,10 +80,17 @@ export class BleService {
     });
   }
 
+  private connectedDevice: Device | null = null;
+
+  getConnectedDevice(): Device | null {
+    return this.connectedDevice;
+  }
+
   async connectToDevice(deviceId: string): Promise<Device> {
     const manager = this.getManager();
     const device = await manager.connectToDevice(deviceId, { autoConnect: true });
     await device.discoverAllServicesAndCharacteristics();
+    this.connectedDevice = device;
     return device;
   }
 
@@ -91,6 +98,17 @@ export class BleService {
     if (Platform.OS === 'web') {
       return;
     }
+    
+    this.connectedDevice = null;
+    
+    // Clear any active intervals for this device
+    Object.keys(this.continueIntervals).forEach((key) => {
+      if (key.startsWith(deviceId)) {
+        clearInterval(this.continueIntervals[key]);
+        delete this.continueIntervals[key];
+      }
+    });
+
     const manager = this.getManager();
     await manager.cancelDeviceConnection(deviceId);
   }
@@ -124,6 +142,55 @@ export class BleService {
       }
     );
   }
+
+  // Record active intervals to keep sending CONTINUE commands
+  private continueIntervals: Record<string, ReturnType<typeof setInterval>> = {};
+
+  async writeUARTCommand(device: Device, base64Value: string): Promise<Characteristic> {
+    return await device.writeCharacteristicWithoutResponseForService(
+      BLE_SERVICE_UUIDS.UART,
+      BLE_CHARACTERISTIC_UUIDS.UART_RX,
+      base64Value
+    );
+  }
+
+  async startRealTimeMeasurement(device: Device, readingType: number): Promise<void> {
+    const { R02Protocol } = require('./r02Protocol');
+    const startPacket = R02Protocol.getStartPacket(readingType);
+    
+    // Send START command
+    await this.writeUARTCommand(device, startPacket);
+
+    const intervalKey = `${device.id}-${readingType}`;
+    if (this.continueIntervals[intervalKey]) {
+      clearInterval(this.continueIntervals[intervalKey]);
+    }
+
+    // Send CONTINUE command every 2 seconds to maintain active measurement
+    this.continueIntervals[intervalKey] = setInterval(async () => {
+      try {
+        const continuePacket = R02Protocol.getContinuePacket(readingType);
+        await this.writeUARTCommand(device, continuePacket);
+      } catch (err) {
+        console.error(`[BleService] Failed to send continue packet for type ${readingType}:`, err);
+      }
+    }, 2000);
+  }
+
+  async stopRealTimeMeasurement(device: Device, readingType: number): Promise<void> {
+    const { R02Protocol } = require('./r02Protocol');
+    const stopPacket = R02Protocol.getStopPacket(readingType);
+
+    const intervalKey = `${device.id}-${readingType}`;
+    if (this.continueIntervals[intervalKey]) {
+      clearInterval(this.continueIntervals[intervalKey]);
+      delete this.continueIntervals[intervalKey];
+    }
+
+    // Send STOP command
+    await this.writeUARTCommand(device, stopPacket);
+  }
 }
 
 export const bleService = new BleService();
+

@@ -222,5 +222,5 @@ const styles = StyleSheet.create({
   stageDot: { width: 8, height: 8, borderRadius: 4 },
   stageName: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '500' },
   stageDuration: { fontSize: 14, color: COLORS.text, fontWeight: '600' },
-  bottomSpacer: { height: 30 },
+  bottomSpacer: { height: 80 },
 });
