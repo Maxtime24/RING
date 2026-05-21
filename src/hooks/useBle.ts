@@ -44,6 +44,12 @@ export function useBle() {
     console.log('[useBle] Starting 30s Keep-Alive heartbeat to keep Colmi R02 awake...');
     keepAliveInterval = setInterval(async () => {
       try {
+        const store = require('../store/useAppStore').default.getState();
+        if (store.isMeasuringHR || store.isMeasuringO2) {
+          // Skip keep-alive if already measuring, as CONTINUE packets keep the ring awake
+          return;
+        }
+
         const { R02Protocol, R02Command } = require('../services/ble/r02Protocol');
         // Query battery level (0x03) as keep-alive payload
         const batteryCmd = R02Protocol.createCommand(R02Command.BATTERY);
