@@ -1,5 +1,4 @@
-import React from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { Dimensions, StyleSheet, View } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { COLORS } from '../src/constants';
 
@@ -14,11 +13,15 @@ const { width } = Dimensions.get('window');
 export default function DetailChart({ data, color, height = 280 }: DetailChartProps) {
   const chartWidth = width - 40;
 
+  // Filter out null values for the chart (this creates gaps where data is missing)
+  // But we need to keep the indices consistent for alignment with labels
+  const chartDataValues = data.map(d => d.value ?? 0); // Use 0 as placeholder for null, chart will render as gap
+
   const chartData = {
     labels: data.map((_, i) => (i % Math.ceil(data.length / 6) === 0 ? data[i].time : '')),
     datasets: [
       {
-        data: data.map(d => d.value),
+        data: chartDataValues,
         color: (opacity = 1) => color,
         strokeWidth: 3,
       },
@@ -51,6 +54,8 @@ export default function DetailChart({ data, color, height = 280 }: DetailChartPr
         }}
         bezier
         style={styles.chart}
+        withHorizontalLines={true}
+        withVerticalLines={false}
       />
     </View>
   );

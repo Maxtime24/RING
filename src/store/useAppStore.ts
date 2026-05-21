@@ -1,13 +1,13 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import {
-  BLEConnectionState,
-  BLEDevice,
-  FocusAnalysis,
-  HealthData,
-  SleepData,
-  User,
+    BLEConnectionState,
+    BLEDevice,
+    FocusAnalysis,
+    HealthData,
+    SleepData,
+    User,
 } from '../types';
 
 const MAX_HISTORY_LENGTH = 2000; // Limit history to prevent excessive memory usage
@@ -82,21 +82,63 @@ const useAppStore = create<AppStore>()(
       
       setHeartRate: (bpm: number) => set((state) => {
         const timestamp = new Date().toISOString();
-        const newHealth = state.currentHealth 
-          ? { ...state.currentHealth, heartRate: bpm, timestamp } 
-          : { heartRate: bpm, oxygenLevel: 0, steps: 0, calories: 0, distance: 0, timestamp, id: timestamp, userId: 'local' } as any;
-          
-        const newHistory = [...state.healthHistory, newHealth].slice(-MAX_HISTORY_LENGTH);
+        
+        // Get or create current health record for this hour
+        const hourKey = new Date(timestamp).getHours();
+        let lastHealthRecord = state.currentHealth;
+        
+        // Find if we have a health record from the same hour
+        const sameHourRecord = state.healthHistory.find((h: any) => {
+          const hTime = new Date(h.timestamp);
+          return hTime.getHours() === hourKey && 
+                 hTime.toDateString() === new Date(timestamp).toDateString();
+        });
+        
+        // Merge with existing data instead of overwriting
+        const newHealth = sameHourRecord 
+          ? { ...sameHourRecord, heartRate: bpm, timestamp }
+          : (lastHealthRecord 
+              ? { ...lastHealthRecord, heartRate: bpm, timestamp } 
+              : { heartRate: bpm, oxygenLevel: 0, steps: 0, calories: 0, distance: 0, timestamp, id: timestamp, userId: 'local' } as any);
+        
+        // Update history: remove old record if it exists, add new one
+        let newHistory = state.healthHistory;
+        if (sameHourRecord) {
+          newHistory = newHistory.filter((h: any) => h.timestamp !== sameHourRecord.timestamp);
+        }
+        newHistory = [...newHistory, newHealth].slice(-MAX_HISTORY_LENGTH);
+        
         return { currentHealth: newHealth, healthHistory: newHistory };
       }),
       
       setOxygenLevel: (spo2: number) => set((state) => {
         const timestamp = new Date().toISOString();
-        const newHealth = state.currentHealth 
-          ? { ...state.currentHealth, oxygenLevel: spo2, timestamp } 
-          : { heartRate: 0, oxygenLevel: spo2, steps: 0, calories: 0, distance: 0, timestamp, id: timestamp, userId: 'local' } as any;
-          
-        const newHistory = [...state.healthHistory, newHealth].slice(-MAX_HISTORY_LENGTH);
+        
+        // Get or create current health record for this hour
+        const hourKey = new Date(timestamp).getHours();
+        let lastHealthRecord = state.currentHealth;
+        
+        // Find if we have a health record from the same hour
+        const sameHourRecord = state.healthHistory.find((h: any) => {
+          const hTime = new Date(h.timestamp);
+          return hTime.getHours() === hourKey && 
+                 hTime.toDateString() === new Date(timestamp).toDateString();
+        });
+        
+        // Merge with existing data instead of overwriting
+        const newHealth = sameHourRecord 
+          ? { ...sameHourRecord, oxygenLevel: spo2, timestamp }
+          : (lastHealthRecord 
+              ? { ...lastHealthRecord, oxygenLevel: spo2, timestamp } 
+              : { heartRate: 0, oxygenLevel: spo2, steps: 0, calories: 0, distance: 0, timestamp, id: timestamp, userId: 'local' } as any);
+        
+        // Update history: remove old record if it exists, add new one
+        let newHistory = state.healthHistory;
+        if (sameHourRecord) {
+          newHistory = newHistory.filter((h: any) => h.timestamp !== sameHourRecord.timestamp);
+        }
+        newHistory = [...newHistory, newHealth].slice(-MAX_HISTORY_LENGTH);
+        
         return { currentHealth: newHealth, healthHistory: newHistory };
       }),
       

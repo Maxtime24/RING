@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  View,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DetailChart from '../components/DetailChart';
@@ -36,37 +36,83 @@ export default function HeartRateScreen() {
     { label: '최저', value: '58', unit: 'bpm' },
   ];
 
-  // Map real healthHistory from BLE
-  const realChartData = healthHistory
-    .filter((d: any) => d.heartRate > 0)
-    .map((d: any) => {
-      const date = new Date(d.timestamp);
-      const hours = date.getHours().toString().padStart(2, '0');
-      const mins = date.getMinutes().toString().padStart(2, '0');
-      return {
-        time: `${hours}:${mins}`,
-        value: d.heartRate,
-        id: d.timestamp,
-      };
-    });
+  // Group data by hour and calculate average for 24h view
+  const getHourlyData = () => {
+    if (healthHistory.length === 0) {
+      return timeRange === '24h' 
+        ? Array.from({ length: 24 }, (_, i) => ({
+            time: `${i.toString().padStart(2, '0')}:00`,
+            value: null,
+            id: `24h-${i}`,
+          }))
+        : Array.from({ length: 60 }, (_, i) => ({
+            time: `${Math.floor(i / 6)}:${(i % 6) * 10}`,
+            value: null,
+            id: `1h-${i}`,
+          }));
+    }
 
-  // Fallback to mock data only if we have absolutely no history, to keep UI looking good
-  const mockData24h = Array.from({ length: 24 }, (_, i) => ({
-    time: `${i}:00`,
-    value: 60 + Math.sin(i / 4) * 20 + Math.random() * 10,
-    id: `24h-${i}`,
-  }));
+    if (timeRange === '24h') {
+      const hourlyGroups: Record<number, number[]> = {};
+      
+      // Group measurements by hour
+      healthHistory.forEach((d: any) => {
+        if (d.heartRate > 0) {
+          const date = new Date(d.timestamp);
+          const hour = date.getHours();
+          if (!hourlyGroups[hour]) hourlyGroups[hour] = [];
+          hourlyGroups[hour].push(d.heartRate);
+        }
+      });
+      
+      // Create hourly data points with averages
+      return Array.from({ length: 24 }, (_, i) => {
+        const values = hourlyGroups[i] || [];
+        const avgValue = values.length > 0 
+          ? Math.round(values.reduce((a, b) => a + b, 0) / values.length)
+          : null;
+        return {
+          time: `${i.toString().padStart(2, '0')}:00`,
+          value: avgValue,
+          id: `24h-${i}`,
+        };
+      });
+    } else {
+      // For 1-hour view, show minute-by-minute data from last hour
+      const now = new Date();
+      const oneHourAgo = new Date(now.getTime() - 3600000);
+      
+      const minuteGroups: Record<number, number[]> = {};
+      
+      healthHistory.forEach((d: any) => {
+        const date = new Date(d.timestamp);
+        if (date >= oneHourAgo && d.heartRate > 0) {
+          const diffMs = date.getTime() - oneHourAgo.getTime();
+          const minute = Math.floor(diffMs / 60000);
+          if (!minuteGroups[minute]) minuteGroups[minute] = [];
+          minuteGroups[minute].push(d.heartRate);
+        }
+      });
+      
+      // Create minute-by-minute data
+      return Array.from({ length: 60 }, (_, i) => {
+        const values = minuteGroups[i] || [];
+        const avgValue = values.length > 0 
+          ? Math.round(values.reduce((a, b) => a + b, 0) / values.length)
+          : null;
+        const startMin = oneHourAgo.getMinutes() + i;
+        const displayHour = oneHourAgo.getHours();
+        const displayMin = startMin % 60;
+        return {
+          time: `${displayHour.toString().padStart(2, '0')}:${displayMin.toString().padStart(2, '0')}`,
+          value: avgValue,
+          id: `1h-${i}`,
+        };
+      });
+    }
+  };
 
-  const mockData1h = Array.from({ length: 60 }, (_, i) => ({
-    time: `${Math.floor(i / 6)}:${(i % 6) * 10}`,
-    value: 72 + Math.sin(i / 10) * 5 + Math.random() * 3,
-    id: `1h-${i}`,
-  }));
-
-  // If we have real data, use it. Otherwise, fallback.
-  const chartData = realChartData.length > 0 
-    ? realChartData 
-    : (timeRange === '24h' ? mockData24h : mockData1h);
+  const chartData = getHourlyData();
 
   const formatTime = (isoString: string | null) => {
     if (!isoString) return '';
