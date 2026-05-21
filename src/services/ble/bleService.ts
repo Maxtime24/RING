@@ -91,7 +91,38 @@ export class BleService {
     const device = await manager.connectToDevice(deviceId, { autoConnect: true });
     await device.discoverAllServicesAndCharacteristics();
     this.connectedDevice = device;
+
+    // Initialize ring state by stopping any ongoing measurements
+    await this.stopAllMeasurements(device);
+
     return device;
+  }
+
+  async stopAllMeasurements(device: Device): Promise<void> {
+    const { R02Protocol, RealTimeReading } = require('./r02Protocol');
+    
+    // Clear any active intervals for this device
+    Object.keys(this.continueIntervals).forEach((key) => {
+      if (key.startsWith(device.id)) {
+        clearInterval(this.continueIntervals[key]);
+        delete this.continueIntervals[key];
+      }
+    });
+
+    try {
+      // Send STOP command for both Heart Rate and SpO2 to ensure ring is initialized
+      const stopHR = R02Protocol.getStopPacket(RealTimeReading.HEART_RATE);
+      await this.writeUARTCommand(device, stopHR);
+      
+      // Brief delay to prevent packet collision
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      const stopSpO2 = R02Protocol.getStopPacket(RealTimeReading.SPO2);
+      await this.writeUARTCommand(device, stopSpO2);
+      console.log('[BleService] Successfully initialized ring and stopped previous measurements.');
+    } catch (err) {
+      console.warn('[BleService] Failed to stop all measurements during initialization:', err);
+    }
   }
 
   async disconnectDevice(deviceId: string): Promise<void> {
