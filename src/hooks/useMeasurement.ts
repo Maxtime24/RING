@@ -99,14 +99,14 @@ export function useMeasurement() {
       clearInterval(globalAutoMeasureInterval);
     }
 
-    console.log('[useMeasurement] Starting 10-minute auto health measurement schedule...');
+    console.log('[useMeasurement] Starting 1-hour auto health measurement schedule...');
     // Trigger immediately upon starting the schedule
     triggerAutoMeasurement();
 
-    // Set interval for every 10 minutes (600,000 ms)
+    // Set interval for every 1 hour (3,600,000 ms)
     globalAutoMeasureInterval = setInterval(() => {
       triggerAutoMeasurement();
-    }, 600000);
+    }, 3600000);
   }, [triggerAutoMeasurement]);
 
   const stopAutoSchedule = useCallback(() => {

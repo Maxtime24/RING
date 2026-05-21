@@ -1,13 +1,19 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { bleService } from '../services/ble/bleService';
 import useAppStore from '../store/useAppStore';
+
+// Keep-Alive interval reference to persist across renders
+let keepAliveInterval: ReturnType<typeof setInterval> | null = null;
 
 export function useBle() {
   const bleConnection = useAppStore((state: any) => state.bleConnection);
   const bleDevices = useAppStore((state: any) => state.bleDevices);
   const setBleDevices = useAppStore((state: any) => state.setBleDevices);
   const setBleConnection = useAppStore((state: any) => state.setBleConnection);
+  
+  // Reconnect state using ref to avoid trigger loops
+  const isReconnecting = useRef(false);
 
   const requestPermissions = async () => {
     if (Platform.OS === 'android' && Platform.Version >= 31) {
@@ -30,6 +36,33 @@ export function useBle() {
     return true; // iOS handles this via Info.plist
   };
 
+  const startKeepAlive = (device: any) => {
+    if (keepAliveInterval) {
+      clearInterval(keepAliveInterval);
+    }
+
+    console.log('[useBle] Starting 30s Keep-Alive heartbeat to keep Colmi R02 awake...');
+    keepAliveInterval = setInterval(async () => {
+      try {
+        const { R02Protocol, R02Command } = require('../services/ble/r02Protocol');
+        // Query battery level (0x03) as keep-alive payload
+        const batteryCmd = R02Protocol.createCommand(R02Command.BATTERY);
+        await bleService.writeUARTCommand(device, batteryCmd);
+        console.log('[useBle] Keep-Alive heartbeat sent successfully.');
+      } catch (err) {
+        console.error('[useBle] Failed to send Keep-Alive heartbeat:', err);
+      }
+    }, 30000);
+  };
+
+  const stopKeepAlive = () => {
+    if (keepAliveInterval) {
+      clearInterval(keepAliveInterval);
+      keepAliveInterval = null;
+      console.log('[useBle] Keep-Alive heartbeat stopped.');
+    }
+  };
+
   const scanDevices = useCallback(async () => {
     const hasPermission = await requestPermissions();
     if (!hasPermission) {
@@ -50,6 +83,42 @@ export function useBle() {
       setBleConnection({ isScanning: false });
     }
   }, [setBleDevices, setBleConnection]);
+
+  const attemptAutoReconnect = useCallback(
+    async (deviceId: string) => {
+      if (isReconnecting.current) return;
+      isReconnecting.current = true;
+      console.log('[useBle] Auto-Reconnect activated for device:', deviceId);
+
+      let attempts = 0;
+      const maxAttempts = 5;
+
+      const tryConnect = async () => {
+        if (attempts >= maxAttempts) {
+          console.log('[useBle] Auto-reconnect failed after maximum attempts.');
+          isReconnecting.current = false;
+          return;
+        }
+
+        attempts++;
+        console.log(`[useBle] Auto-reconnect attempt ${attempts}/${maxAttempts} in 3 seconds...`);
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+
+        try {
+          // Re-trigger connectToDevice
+          await connectToDevice(deviceId);
+          console.log('[useBle] Auto-reconnect successful!');
+          isReconnecting.current = false;
+        } catch (err) {
+          console.error(`[useBle] Reconnect attempt ${attempts} failed:`, err);
+          tryConnect();
+        }
+      };
+
+      tryConnect();
+    },
+    [] // dependency on connectToDevice will be handled below implicitly
+  );
 
   const connectToDevice = useCallback(
     async (deviceId: string) => {
@@ -86,6 +155,24 @@ export function useBle() {
           }
         );
 
+        // Setup disconnection listener for Auto-Reconnect
+        device.onDisconnected((error: any, disconnectedDevice: any) => {
+          console.log('[useBle] Smart ring disconnected naturally:', disconnectedDevice?.id || deviceId, error);
+          stopKeepAlive();
+          setBleConnection({
+            isConnected: false,
+            device: null,
+          });
+
+          // Trigger Auto-Reconnect if it's not a manual disconnect
+          if (!isReconnecting.current) {
+            attemptAutoReconnect(deviceId);
+          }
+        });
+
+        // Start periodic Keep-Alive heartbeat to maintain BLE connection
+        startKeepAlive(device);
+
         setBleConnection({
           isConnected: true,
           device: {
@@ -105,11 +192,15 @@ export function useBle() {
         setBleConnection({ isConnecting: false });
       }
     },
-    [setBleConnection]
+    [setBleConnection, attemptAutoReconnect]
   );
 
   const disconnectDevice = useCallback(
     async (deviceId: string) => {
+      // Prevent auto-reconnect since it's a manual disconnect
+      isReconnecting.current = true;
+      stopKeepAlive();
+      
       try {
         await bleService.disconnectDevice(deviceId);
       } finally {
@@ -117,6 +208,7 @@ export function useBle() {
           isConnected: false,
           device: null,
         });
+        isReconnecting.current = false;
       }
     },
     [setBleConnection]
@@ -130,3 +222,4 @@ export function useBle() {
     disconnectDevice,
   };
 }
+

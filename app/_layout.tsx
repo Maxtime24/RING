@@ -76,8 +76,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     borderTopColor: COLORS.border,
     borderTopWidth: 1,
-    height: Platform.OS === 'ios' ? 88 : 80,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 20,
+    height: Platform.OS === 'ios' ? 98 : 105,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 45,
     paddingTop: 10,
   },
   header: {
