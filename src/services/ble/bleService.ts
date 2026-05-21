@@ -195,17 +195,12 @@ export class BleService {
     const intervalKey = `${device.id}-${readingType}`;
     if (this.continueIntervals[intervalKey]) {
       clearInterval(this.continueIntervals[intervalKey]);
+      delete this.continueIntervals[intervalKey];
     }
-
-    // Send CONTINUE command every 2 seconds to maintain active measurement
-    this.continueIntervals[intervalKey] = setInterval(async () => {
-      try {
-        const continuePacket = R02Protocol.getContinuePacket(readingType);
-        await this.writeUARTCommand(device, continuePacket);
-      } catch (err) {
-        console.error(`[BleService] Failed to send continue packet for type ${readingType}:`, err);
-      }
-    }, 2000);
+    
+    // Note: tahnok's colmi_r02_client does not send CONTINUE packets.
+    // It appears the ring streams data continuously until STOP is sent.
+    // Sending CONTINUE every 2 seconds might be causing the red/green flashing glitches.
   }
 
   async stopRealTimeMeasurement(device: Device, readingType: number): Promise<void> {

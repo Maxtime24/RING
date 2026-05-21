@@ -145,7 +145,7 @@ export class R02Protocol {
   }
 
   static getStopPacket(readingType: RealTimeReading): string {
-    return this.makePacket(CMD_START_REAL_TIME, [readingType, 0x00]).toString('base64');
+    return this.makePacket(CMD_STOP_REAL_TIME, [readingType, 0, 0]).toString('base64');
   }
 }
 
